@@ -33,6 +33,27 @@ export const listRDSInstance = async (): Promise<DBInstance[]> => {
   }
 };
 
+export const getRDSInstanceData = async (instanceId: string, rds: RDSClient): Promise<DBInstance> => {
+    const { DBInstances } = await rds.send(
+        new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: instanceId,
+        })
+    );
+
+    if (!DBInstances || DBInstances.length === 0) {
+        throw new Error(`RDS instance ${instanceId} not found`);
+    }
+
+    for (const dbInstance of DBInstances) {
+        // Do something with each DB instance
+        if (dbInstance.DBInstanceIdentifier === instanceId) {
+            return dbInstance;
+        }
+    }
+
+    throw new Error(`RDS instance ${instanceId} not found`);
+};
+
 export const pickRDSSnapshot = async (instanceId: string, rds: RDSClient): Promise<{
     exit: boolean,
     snapshotId: string

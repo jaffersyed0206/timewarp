@@ -90,6 +90,8 @@ export const createAWS_RDSService = async (name: string, db_engine: "mariadb" | 
                 engine: db.Engine,
                 engineVersion: db.EngineVersion,
                 availabilityZone: db.AvailabilityZone,
+                endpoint: db.Endpoint,
+                username: db.MasterUsername
             }),
         })),
     });
