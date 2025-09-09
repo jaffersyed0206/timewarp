@@ -8,7 +8,7 @@ export default class Init extends Command {
   static description = "Initialize Timewarp for your project";
 
   async run() {
-    const { configPath } = initTimewarpFolder();
+    const { configPath } = await initTimewarpFolder();
     this.log(`Using Timewarp config at: ${configPath}`);
     const projectName = await input({
         default: "my-project",

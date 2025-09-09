@@ -15,7 +15,8 @@
     "@oclif/core": "^4",
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-plugins": "^5",
-    "ini": "^5.0.0"
+    "ini": "^5.0.0",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@eslint/compat": "^1",
@@ -25,6 +26,7 @@
     "@types/ini": "^4.1.1",
     "@types/mocha": "^10",
     "@types/node": "^24.3.0",
+    "@types/pg": "^8.15.5",
     "chai": "^4",
     "eslint": "^9",
     "eslint-config-oclif": "^6",

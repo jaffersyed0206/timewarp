@@ -1,3 +1,5 @@
+/* eslint-disable no-return-await */
+/* eslint-disable complexity */
 /* eslint-disable no-promise-executor-return */
 /* eslint-disable unicorn/numeric-separators-style */
 /* eslint-disable no-await-in-loop */
@@ -7,8 +9,21 @@
 /* eslint-disable n/no-process-exit */
 /* eslint-disable n/no-extraneous-import */
 import { CreateDBSnapshotCommand, DBInstance, DeleteDBInstanceCommand, DescribeDBInstancesCommand, DescribeDBSnapshotsCommand, RDSClient, RestoreDBInstanceFromDBSnapshotCommand } from "@aws-sdk/client-rds";
-import { input, select } from "@inquirer/prompts";
+import { input, password, select } from "@inquirer/prompts";
 import chalk from "chalk";
+import { Client } from "pg";
+
+
+export interface RDSInstance {
+  availabilityZone: string;
+  dbInstanceIdentifier: string;
+  dbname: string;
+  endpoint: string;
+  engine: string;
+  engineVersion: string;
+  port: number;
+  username: string;
+}
 
 export const listRDSInstance = async (): Promise<DBInstance[]> => {
   try {
@@ -33,7 +48,7 @@ export const listRDSInstance = async (): Promise<DBInstance[]> => {
   }
 };
 
-export const getRDSInstanceData = async (instanceId: string, rds: RDSClient): Promise<DBInstance> => {
+export const getRDSInstanceData = async (instanceId: string, rds: RDSClient): Promise<RDSInstance> => {
     const { DBInstances } = await rds.send(
         new DescribeDBInstancesCommand({
             DBInstanceIdentifier: instanceId,
@@ -47,7 +62,38 @@ export const getRDSInstanceData = async (instanceId: string, rds: RDSClient): Pr
     for (const dbInstance of DBInstances) {
         // Do something with each DB instance
         if (dbInstance.DBInstanceIdentifier === instanceId) {
-            return dbInstance;
+
+            const validEndpoint: boolean = dbInstance.Endpoint !== undefined;
+            const validAvailabilityZone: boolean = dbInstance.AvailabilityZone !== undefined;
+            const validEngine: boolean = dbInstance.Engine !== undefined;
+            const validEngineVersion: boolean = dbInstance.EngineVersion !== undefined;
+            const validUsername: boolean = dbInstance.MasterUsername !== undefined;
+            const validDBInstanceIdentifier: boolean = dbInstance.DBInstanceIdentifier !== undefined;
+            const validPort: boolean = dbInstance.Endpoint?.Port !== undefined;
+            const validDBName: boolean = dbInstance.DBName !== undefined;
+
+            if (!validEndpoint || !validAvailabilityZone || !validEngine || !validEngineVersion || !validUsername || !validDBInstanceIdentifier || !validPort || !validDBName) {
+                throw new Error(`RDS instance ${instanceId} is missing required properties`);
+            }
+
+            const endpoint: string = dbInstance.Endpoint?.Address ?? "";
+            const availabilityZone: string = dbInstance.AvailabilityZone ?? "";
+            const engine: string = dbInstance.Engine ?? "";
+            const engineVersion: string = dbInstance.EngineVersion ?? "";
+            const username: string = dbInstance.MasterUsername ?? "";
+            const dbInstanceIdentifier: string = dbInstance.DBInstanceIdentifier ?? "";
+            const dbname: string = dbInstance.DBName ?? "";
+
+            return {
+                endpoint,
+                availabilityZone,
+                engine,
+                engineVersion,
+                username,
+                dbInstanceIdentifier,
+                port: dbInstance.Endpoint?.Port ?? 0,
+                dbname
+            };
         }
     }
 
@@ -129,6 +175,10 @@ const createAWS_RDSSnapshot = async (instanceId: string, rds: RDSClient): Promis
     return snapshotId;
 };
 
+/*
+ in here the instanceId will be the string of the temp instance that you want to create and the
+ snapshotId will be the string of the snapshot that you want to restore from
+*/
 export const restoreDBInstanceFromSnapshot = async (instanceId: string, snapshotId: string, rds: RDSClient): Promise<void> => {
     await rds.send(
         new RestoreDBInstanceFromDBSnapshotCommand({
@@ -171,3 +221,75 @@ export const deleteDBInstance = async (instanceId: string, rds: RDSClient): Prom
 
     console.log(`✅ DB instance ${instanceId} deleted.`);
 };
+
+export const connectToRDSValid = async (instanceParams: {
+    database: string,
+    host: string,
+    password: string
+    port: number,
+    ssl: { rejectUnauthorized: false }, // often required for RDS
+    username: string,
+}): Promise<boolean> => {
+    const client = new Client({
+        host: instanceParams.host,
+        port: instanceParams.port,
+        database: instanceParams.database,
+        user: instanceParams.username,
+        password: instanceParams.password,
+        ssl: { rejectUnauthorized: false }, // often required for RDS
+    });
+    try {
+        await client.connect();
+        console.log("✅ Connection successful!");
+        await client.end();
+
+        // you could save to .timewarp/config.json here
+        return true;
+    } catch (error: any) {
+        console.error("❌ Connection failed:", error.message);
+        return false;
+    }
+}
+
+export const verifyRDSConnection = async (instanceParams: {
+    database: string,
+    host: string,
+    password: string
+    port: number,
+    ssl: { rejectUnauthorized: false }, // often required for RDS
+    username: string,
+}): Promise<{
+    connection: boolean,
+    password: string
+}> => {
+    const verifiedRDSInstance = await connectToRDSValid(instanceParams);
+    if (!verifiedRDSInstance) {
+        const retryInstanceConnection = await select({
+            message: "❌ RDS connection verification failed. Would you like to retry?",
+            choices: [
+                { name: "Yes", value: "yes" },
+                { name: "No", value: "no" }
+            ]
+        });
+
+        if (retryInstanceConnection === "yes") {
+            const newPassword = await password({
+                message: "Enter the correct password:",
+            })
+            return await verifyRDSConnection({
+                ...instanceParams,
+                password: newPassword
+            });
+        }
+ 
+        return {
+            connection: false,
+            password: instanceParams.password
+        };
+    }
+
+    return {
+        connection: true,
+        password: instanceParams.password
+    }
+}

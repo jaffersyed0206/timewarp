@@ -1,5 +1,9 @@
+/* eslint-disable unicorn/no-array-callback-reference */
+/* eslint-disable unicorn/no-array-for-each */
+/* eslint-disable no-return-await */
 import { input, select } from "@inquirer/prompts";
 
+import { readConfig, TimewarpConfig } from "../config/index.ts";
 import { retrieveDatabaseInstance, retrieveDockerImage } from "./providers/functions.ts";
 
 export interface Service {
@@ -39,10 +43,14 @@ export const addMultipleServices = async (services: Service[]): Promise<Service[
 
   const serviceTypeLabel: string = serviceType === "api" ? "API" : serviceType === "db" ? "Database" : "Web"; 
 
-  const serviceName = await input({
+  const initialServiceName = await input({
     message: `What is the name of this ${serviceTypeLabel} service?`,
     default: `my-${serviceType}-service`,
   });
+
+  const config: TimewarpConfig = readConfig();
+
+  const serviceName: string = await checkForExistingServices(initialServiceName, mergeServices(config.services, services));
 
   switch (serviceType) {
     case "api": {
@@ -89,6 +97,41 @@ export const addMultipleServices = async (services: Service[]): Promise<Service[
 
   return services;
 };
+
+export const checkForExistingServices = async (serviceName: string, services: Service[]): Promise<string> => {
+  // Check for existing services
+  if (services.some(service => service.name === serviceName)) {
+    const renameService = await input({
+      message: `Service ${serviceName} already exists. Please enter a new name for the service:`,
+      default: serviceName
+    });
+
+    return await checkForExistingServices(renameService, services);    
+  }
+
+  return serviceName;
+};
+
+/**
+ * Merge two arrays of services and remove duplicates.
+ * Duplicates are identified by `id` if present, otherwise by `name`.
+ */
+export const mergeServices = (arr1: Service[], arr2: Service[]): Service[] => {
+  const map = new Map<string, Service>();
+
+  const addService = (svc: Service) => {
+    const key = svc.id || svc.name; // prefer id, else name
+    if (!map.has(key)) {
+      map.set(key, svc);
+    }
+  };
+
+  arr1.forEach(addService);
+  arr2.forEach(addService);
+
+  return [...map.values()];
+};
+
 
 // TODO: Add a single service
 export const addSingleService = async (): Promise<void> => {}

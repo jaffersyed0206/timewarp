@@ -77,7 +77,7 @@ export const createAWS_RDSService = async (name: string, db_engine: "mariadb" | 
         await awsAuthentication();
     }
 
-    const DBInstances = await listRDSInstance();
+    const DBInstances: DBInstance[] = await listRDSInstance();
 
     const engineDatabases: DBInstance[] = DBInstances.filter((db) => db.Engine === db_engine);
 
