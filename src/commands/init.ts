@@ -2,7 +2,7 @@ import { input } from '@inquirer/prompts';
 import { Command } from "@oclif/core";
 
 import { initTimewarpFolder, readConfig, TimewarpConfig, updateConfig } from '../config/index.ts';
-import { addMultipleServices, processAllLongProcessors } from '../services/services.ts';
+import { addMultipleServices, processAllLongProcessors, Service } from '../services/services.ts';
 
 export default class Init extends Command {
   static description = "Initialize Timewarp for your project";
@@ -16,15 +16,15 @@ export default class Init extends Command {
         required: true
     });
 
-    const services = await addMultipleServices([]);
+    let services: Service[] = await addMultipleServices([]);
     this.log(`Project ${projectName} initialized with ${services.length} services.`);
+
+    const config: TimewarpConfig = readConfig();
+    services = await processAllLongProcessors(config.services);
     updateConfig((config) => ({
       ...config,
       services: [...config.services, ...services]
     }));
-
-    const config: TimewarpConfig = readConfig();
-    processAllLongProcessors(config.services);
     console.log("✅ Timewarp initialization complete.");
   }
 }

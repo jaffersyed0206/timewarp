@@ -1,9 +1,13 @@
+/* eslint-disable no-await-in-loop */
+ 
 /* eslint-disable unicorn/no-array-callback-reference */
 /* eslint-disable unicorn/no-array-for-each */
 /* eslint-disable no-return-await */
+import { RDSClient } from "@aws-sdk/client-rds";
 import { input, select } from "@inquirer/prompts";
 
 import { readConfig, TimewarpConfig } from "../config/index.ts";
+import { processPostgresDatabaseDataDumpDir } from "./providers/aws/rds/postgres/index.ts";
 import { retrieveDatabaseInstance, retrieveDockerImage } from "./providers/functions.ts";
 
 export interface Service {
@@ -66,9 +70,11 @@ export const addMultipleServices = async (services: Service[]): Promise<Service[
       // Handle Database service onboarding
       console.log("Onboarding Database service...");
       const dbService: Service = await retrieveDatabaseInstance();
-      console.log(dbService);
-      services.push(dbService);
-      console.log(`${serviceName} Database service onboarded successfully.`);
+      if (dbService) {
+        services.push(dbService);
+        console.log(`${serviceName} Database service onboarded successfully.`);
+      }
+
       break;
     }
 
@@ -140,4 +146,22 @@ export const addSingleService = async (): Promise<void> => {}
 export const updateMultipleServices = async (): Promise<void> => {}
 
 // TODO: process all long processors
-export const processAllLongProcessors = (services: Service[]) => services
+export const processAllLongProcessors = async (services: Service[]): Promise<Service[]> => {
+  // Long Processes are as follows:
+  // 1. Database migrations
+  // 2. API data seeding
+  // 3. File uploads
+  // TODO: Refactor to handle more than just the AWS
+  const rds = new RDSClient({});
+  for (let service of services) {
+    // Process each service's long-running tasks
+    if (service.type === "db") {
+      // Handle database migrations
+      const populatedService: Service = await processPostgresDatabaseDataDumpDir(service, rds);
+      service = populatedService;
+    }
+  }
+
+  return services;
+}
+

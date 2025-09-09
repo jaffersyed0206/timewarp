@@ -9,7 +9,7 @@ import { createServiceDataDir } from "../../../../../config/index.ts";
 import { Service } from "../../../../services.ts";
 import { getRDSInstanceData, RDSInstance, restoreDBInstanceFromSnapshot, verifyRDSConnection } from "../index.ts";
 
-export const dumpAWSRDSPostgresDatabase = async (service: Service, rds: RDSClient): Promise<Service> => {
+export const processPostgresDatabaseDataDumpDir = async (service: Service, rds: RDSClient): Promise<Service> => {
     // Implementation for dumping a Postgres database
     if (!service.tempInstanceId || !service.snapshotId) {
         throw new Error("tempInstanceId and snapshotId must be defined");
@@ -83,7 +83,7 @@ export const exportPostgresSnapshot = async (
       {
         env: {
           ...process.env, // keep system PATH etc.
-          PGPASSWORD: password, // inject password securely
+          PGPASSWORD: password,
         },
       },
       (error, stdout, stderr) => {
