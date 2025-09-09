@@ -2,7 +2,7 @@ import { input } from '@inquirer/prompts';
 import { Command } from "@oclif/core";
 
 import { initTimewarpFolder, readConfig, TimewarpConfig, updateConfig } from '../config/index.ts';
-import { addMultipleServices, processAllLongProcessors, Service } from '../services/services.ts';
+import { addMultipleServices, processAllLongProcessors, Service, writeDockerCompose } from '../services/services.ts';
 
 export default class Init extends Command {
   static description = "Initialize Timewarp for your project";
@@ -25,6 +25,8 @@ export default class Init extends Command {
       ...config,
       services: [...config.services, ...services]
     }));
+
+    writeDockerCompose(services);
     console.log("✅ Timewarp initialization complete.");
   }
 }

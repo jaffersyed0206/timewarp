@@ -16,7 +16,8 @@
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-plugins": "^5",
     "ini": "^5.0.0",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@eslint/compat": "^1",

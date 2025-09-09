@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable complexity */
 /* eslint-disable no-await-in-loop */
  
 /* eslint-disable unicorn/no-array-callback-reference */
@@ -5,10 +7,14 @@
 /* eslint-disable no-return-await */
 import { RDSClient } from "@aws-sdk/client-rds";
 import { input, select } from "@inquirer/prompts";
+import fs from "node:fs";
+import path from "node:path";
+import YAML from "yaml";
 
 import { readConfig, TimewarpConfig } from "../config/index.ts";
 import { processPostgresDatabaseDataDumpDir } from "./providers/aws/rds/postgres/index.ts";
 import { retrieveDatabaseInstance, retrieveDockerImage } from "./providers/functions.ts";
+
 
 export interface Service {
   dataDir?: string; // path to .timewarp/data/<dbName>
@@ -20,8 +26,22 @@ export interface Service {
   id?: string; // optional unique ID (good for referencing without relying on name)
   // API / Web specific
   image?: string; // e.g., ECR or Docker Hub image
+  mysql?: {
+    dbname?: string;
+    password?: string;
+    port?: number;
+    username?: string;
+  };
   name: string;
+
   ports?: string[]; // e.g., ["3000:3000"]
+
+  postgres?: {
+    dbname?: string;
+    password?: string;
+    port?: number;
+    username?: string;
+  };
 
   provider: "aws" | "azure" | "gcp" | "local" | string;
   // Optional metadata
@@ -29,8 +49,8 @@ export interface Service {
   snapshotId?: string; // AWS RDS snapshot identifier
   tags?: Record<string, string>; // e.g., { env: "dev", team: "platform" }
   tempInstanceId?: string; // AWS temp instance ID used during snapshot restore
-  type: "api" | "db" | "web";
 
+  type: "api" | "db" | "web";
   version?: string; // e.g., "15" for postgres, "8.0" for mysql
   volumes?: string[]; // for mounting local code/config into containers
 }
@@ -165,3 +185,70 @@ export const processAllLongProcessors = async (services: Service[]): Promise<Ser
   return services;
 }
 
+export const generateDockerCompose = (services: Service[]) => {
+  const compose: {
+    services: { [key: string]: any };
+    version: string;
+  } = {
+    version: "3.9",
+    services: {},
+  };
+
+  for (const svc of services) {
+    if (svc.type === "api" || svc.type === "web") {
+      compose.services[svc.name] = {
+        image: svc.image,
+        ports: svc.ports || [],
+        environment: svc.envVars || {},
+      };
+    }
+
+    if (svc.type === "db") {
+      const base =
+        svc.engine === "postgres"
+          ? {
+              image: `postgres:${svc.version || "15"}`,
+              environment: {
+                POSTGRES_USER: svc.postgres?.username || "postgres",
+                POSTGRES_PASSWORD: svc.postgres?.password || "postgres",
+                POSTGRES_DB: svc.postgres?.dbname || "appdb",
+              },
+              ports: [`${svc.postgres?.port || 5432}:${svc.postgres?.port || 5432}`],
+              volumes: [
+                `${svc.dataDir}:/var/lib/postgresql/data`,
+                `${svc.dumpFile}:/docker-entrypoint-initdb.d/init.sql`,
+              ],
+            }
+          : svc.engine === "mysql"
+          ? {
+              image: `mysql:${svc.version || "8.0"}`,
+              environment: {
+                MYSQL_ROOT_PASSWORD: svc.mysql?.password || "root",
+                MYSQL_DATABASE: svc.mysql?.dbname || "appdb",
+                MYSQL_USER: svc.mysql?.username || "root",
+                MYSQL_PASSWORD: svc.mysql?.password || "root",
+              },
+              ports: [`${svc.mysql?.port || 3306}:${svc.mysql?.port || 3306}`],
+              volumes: [
+                `${svc.dataDir}:/var/lib/mysql`,
+                `${svc.dumpFile}:/docker-entrypoint-initdb.d/init.sql`,
+              ],
+            }
+          : {};
+
+      compose.services[svc.name] = base;
+    }
+  }
+
+  return compose;
+};
+
+export const writeDockerCompose = (services: Service[]) => {
+  const compose = generateDockerCompose(services);
+  const yaml = YAML.stringify(compose);
+
+  const composePath = path.join(process.cwd(), ".timewarp", "docker-compose.yml");
+  fs.writeFileSync(composePath, yaml);
+
+  console.log(`✅ docker-compose.yml written at ${composePath}`);
+};
